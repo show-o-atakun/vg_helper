@@ -1,4 +1,3 @@
-# VgHelper
 # VGHelper
 
 VGHelper is a small Ruby helper library for creating interactive
