@@ -237,8 +237,8 @@ RSpec.describe VGHelper do
       puts "WRITE TO: #{path}"
 
     end
-
-    it "第2軸なしで xdate_test.html を出力できる" do
+    
+    it "第1軸と水平線のみで表示できる" do
       df = Rover::DataFrame.new(
         {
           "datetime" => [
@@ -256,20 +256,22 @@ RSpec.describe VGHelper do
         df,
         "datetime",
         "value",
-        "category"
+        "category",
+        horizontallines: [
+          [11.0, "target"]
+        ],
+        horizontalcolors: ["red"]
       )
 
-      expect(chart).not_to be_nil
-
-      path = File.join(tmpdir, "xdate_test_no2.html")
+      path = File.join(tmpdir, "xdate_y1_horizontal.html")
       VGHelper.write_htmls(chart, path)
 
-      puts "WRITE TO: #{path}"
-
+      expect(chart).not_to be_nil
       expect(File.exist?(path)).to be true
       expect(File.size(path)).to be > 0
-    end
 
+      puts "WRITE TO: #{path}"
+    end
   end
 
   describe ".draw_xnominal" do
@@ -430,6 +432,41 @@ RSpec.describe VGHelper do
       expect(html).to include("Step_002")
       expect(html).to include("Step_003")
       
+      puts "WRITE TO: #{path}"
+    end
+    
+    it "第1軸と水平線のみで表示できる" do
+      df = Rover::DataFrame.new(
+        {
+          "step" => [
+            "STEP_001",
+            "STEP_002",
+            "STEP_003",
+            "STEP_004"
+          ],
+          "category" => ["A", "A", "B", "B"],
+          "value" => [10.0, 12.0, 8.0, 15.0]
+        }
+      )
+
+      chart = VGHelper.draw_xnominal(
+        df,
+        "step",
+        "value",
+        "category",
+        horizontallines: [
+          [11.0, "target"]
+        ],
+        horizontalcolors: ["red"]
+      )
+
+      path = File.join(tmpdir, "xnominal_y1_horizontal.html")
+      VGHelper.write_htmls(chart, path)
+
+      expect(chart).not_to be_nil
+      expect(File.exist?(path)).to be true
+      expect(File.size(path)).to be > 0
+
       puts "WRITE TO: #{path}"
     end
   end

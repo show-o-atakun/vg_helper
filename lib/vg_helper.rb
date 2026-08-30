@@ -655,12 +655,17 @@ module VGHelper
 			.width(width)
 			.height(height)
 
-		if !v2_array.empty?
-			builder = builder.resolve(
-				scale: { y: "independent", color: "independent", x: "shared" },
-				axis: { x: "shared" }
+		resolve_scale = {
+			color: "independent",
+			x: "shared"
+			}
+
+		resolve_scale[:y] = "independent" unless v2_array.empty?
+
+		builder = builder.resolve(
+			scale: resolve_scale,
+			axis: { x: "shared" }
 			)
-		end
 
 		builder
 		
@@ -1529,29 +1534,26 @@ module VGHelper
 		############################
 		# Build
 		############################
-
+		
 		builder =
 			Vega.lite
-			.data(values: all_data)
-			.params(params)
-			.encoding(x: x_encoding)
-			.layer(layers)
-			.width(width)
-			.height(height)
-			.title(title)
+				.data(values: all_data)
+				.params(params)
+				.encoding(x: x_encoding)
+				.layer(layers)
+				.width(width)
+				.height(height)
+				.title(title)
 
-		unless v2_array.empty?
-			builder =
-			builder.resolve(
-				scale: {
-				y:
-					"independent",
+		resolve_scale = {
+			color: "independent"
+			}
 
-				color:
-					"independent"
-				}
+			resolve_scale[:y] = "independent" unless v2_array.empty?
+
+		builder = builder.resolve(
+			scale: resolve_scale
 			)
-		end
 
 		builder
 	end
