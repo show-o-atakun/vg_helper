@@ -102,9 +102,9 @@ module VGHelper
 		               "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
 					   "#393b79", "#637939", "#8c6d31", "#843c39", "#7b4173"] * 10)[0...(categories.length)]
 		horizontalcolors ||= (["#0000ff", "#ff0000"] * 6)[0...(horizontallines.length)]
-		colorset += horizontalcolors
+		# colorset += horizontalcolors
 		verticalcolors ||= (["#0000ff", "#ff0000"] * 6)[0...(verticallines.length)]
-		colorset += verticalcolors
+		# colorset += verticalcolors
 
 		x1_msec = values1[x_col].to_a.map { |v| udate(v) }
 
@@ -264,8 +264,8 @@ module VGHelper
 					y: { 
 						field: y_col,
 						type: "quantitative",
-						scale: { domain: [{expr: "min_y"}, {expr: "max_y"}] },
-						axis: nil
+						scale: { domain: [{expr: "min_y"}, {expr: "max_y"}] }
+						#axis: nil
 					},
 					color: {
 						field: category_col,
@@ -1176,21 +1176,11 @@ module VGHelper
 
 			encoding: {
 				y: {
-				field:
-					y_col_str,
-
-				type:
-					"quantitative",
-
-				scale: {
-					domain:
-					ydomain
+					field: y_col_str,
+					type: "quantitative",
+					scale: { domain: ydomain }
+					#axis: nil 
 				},
-
-				axis:
-					nil
-				},
-
 				color: {
 				field:
 					category_col_str,

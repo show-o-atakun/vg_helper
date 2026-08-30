@@ -5,6 +5,12 @@ require "tmpdir"
 require "fileutils"
 
 RSpec.describe VGHelper do
+  let(:tmpdir) do
+    dir = File.expand_path("../tmp", __dir__)
+    FileUtils.mkdir_p(dir)
+    dir
+  end
+
   let(:date_df) do
     Rover::DataFrame.new(
       {
@@ -230,6 +236,38 @@ RSpec.describe VGHelper do
 
       puts "WRITE TO: #{path}"
 
+    end
+
+    it "第2軸なしで xdate_test.html を出力できる" do
+      df = Rover::DataFrame.new(
+        {
+          "datetime" => [
+            "2025-01-01 10:00:00",
+            "2025-01-02 10:00:00",
+            "2025-01-03 10:00:00",
+            "2025-01-04 10:00:00"
+          ],
+          "category" => ["A", "A", "B", "B"],
+          "value" => [10.0, 12.0, 8.0, 15.0]
+        }
+      )
+
+      chart = VGHelper.draw_xdate(
+        df,
+        "datetime",
+        "value",
+        "category"
+      )
+
+      expect(chart).not_to be_nil
+
+      path = File.join(tmpdir, "xdate_test_no2.html")
+      VGHelper.write_htmls(chart, path)
+
+      puts "WRITE TO: #{path}"
+
+      expect(File.exist?(path)).to be true
+      expect(File.size(path)).to be > 0
     end
 
   end
