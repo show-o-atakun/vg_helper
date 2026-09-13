@@ -67,9 +67,9 @@ RSpec.describe VGHelper do
           ],
 
           "category2" => [
-            "Orange", "Orange", "Orange",
+            "Orange+", "Orange+", "Orange+",
             "Apple", "Apple", "Apple",
-            "Orange", "Orange", "Orange",
+            "Orange+", "Orange+", "Orange+",
             "Apple", "Apple", "Apple"
           ],
 
@@ -167,6 +167,7 @@ RSpec.describe VGHelper do
         x2_col: "datetime",
         y2_col: "volume",
         y2_category_col: "kind",
+        markkind: :large_dot,
 
         horizontallines: [
           [16, "warning"],
@@ -304,10 +305,10 @@ RSpec.describe VGHelper do
           ],
 
           "category2" => [
-            "Orange", "Orange", "Orange",
-            "Apple", "Apple", "Apple",
-            "Orange", "Orange", "Orange",
-            "Apple", "Apple", "Apple"
+            "Orange+", "Orange+", "Orange+",
+            "Apple-", "Apple-", "Apple-",
+            "Orange+", "Orange+", "Orange+",
+            "Apple-", "Apple-", "Apple-"
           ],
 
           "value" => [

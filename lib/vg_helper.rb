@@ -1,13 +1,17 @@
 require "vega"
 require "rover"
+require "json"
 
 # パラメータを任意に足せる/変更できるようにするには？
-# 第2軸の設定は？
-# 垂直線も入れたい
-# 日付軸の水平線 点線未対応
 
 # Use Rover::DataFrame, Not Daru
 # Usage: VGHelper::draw_xdate(df, "datetime", "value", ["category1", "category2"])
+
+# TODO:
+# With a secondary y-axis, the horizontal-line layer creates another
+# y-axis overlapping the main y-axis because y scales are independent.
+# Currently both axes intentionally use the same style.
+# Refactor main + horizontal layers into a nested layer in a future release.
 
 module VGHelper
 
@@ -51,6 +55,60 @@ module VGHelper
 		Time.local(t.year, t.month, t.day).to_i * 1000
 	end
 
+	def mark_preset(kind)
+		case kind
+		when :line
+			{
+			type: "line",
+			tooltip: true,
+			clip: true
+			}
+
+		when :line_dot
+			{
+			type: "line",
+			point: {
+				filled: true,
+				size: 40
+			},
+			tooltip: true,
+			clip: true
+			}
+
+		when :small_dot
+			{
+			type: "point",
+			filled: true,
+			size: 25,
+			opacity: 0.75,
+			tooltip: true,
+			clip: true
+			}
+
+		when :large_dot
+			{
+			type: "point",
+			filled: true,
+			size: 100,
+			opacity: 0.75,
+			tooltip: true,
+			clip: true
+			}
+
+		when :bar
+			{
+			type: "bar",
+			opacity: 0.75,
+			tooltip: true,
+			clip: true
+			}
+
+		else
+			raise ArgumentError,
+			"unknown mark preset: #{kind.inspect}"
+		end
+	end
+
 	def draw_xdate(df, x_col, y_col, category_col,
 				   df2: nil, x2_col: nil, y2_col: nil, y2_category_col: nil,
 				   horizontallines: [], horizontalcolors: nil,
@@ -78,11 +136,11 @@ module VGHelper
 		values1 = df.dup
 
 		if category_col.is_a?(Array)
-		values1["multicategory"] =
-			values1[category_col].to_a.map { _1.values.join("_") }
-		category_col = "multicategory"
+			values1["multicategory"] =
+				values1[category_col].to_a.map { _1.values.join("_") }
+			category_col = "multicategory"
 		else
-		category_col = category_col.to_s
+			category_col = category_col.to_s
 		end
 		############################
 		# Default Settings
@@ -90,12 +148,27 @@ module VGHelper
 		
 		categories ||= values1[category_col].to_a.uniq
 
-		markkind ||= {
-			type: "line",
-			point: { filled: true, size: 40 },
-			tooltip: true,
-			clip: true
-		}
+		#markkind ||= {
+		#	type: "line",
+		#	point: { filled: true, size: 40 },
+		#	tooltip: true,
+		#	clip: true
+		#}
+
+		markkind =
+		case markkind
+			when nil
+				mark_preset(:line_dot)
+			when Symbol
+				mark_preset(markkind)
+			when Hash
+				markkind
+			else
+				raise ArgumentError,
+				"markkind must be a Symbol or Hash"
+		end
+
+
 		title ||= y_col
 		
 		colorset ||= (["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
@@ -235,6 +308,12 @@ module VGHelper
 		#	x_encoding[:timeUnit] = "utcyearmonthdate"
 		#end
 
+		main_y_axis = {
+			orient: reverse_orient ? :right : :left,
+			titleFontSize: 16,
+			labelFontSize: 14
+		}
+
 		# 水平線データの構築
 		horiz_layer = []
 		if horizontallines && !horizontallines.empty?
@@ -264,7 +343,8 @@ module VGHelper
 					y: { 
 						field: y_col,
 						type: "quantitative",
-						scale: { domain: [{expr: "min_y"}, {expr: "max_y"}] }
+						scale: { domain: [{expr: "min_y"}, {expr: "max_y"}] },
+						axis: main_y_axis 
 						#axis: nil
 					},
 					color: {
@@ -275,7 +355,8 @@ module VGHelper
 					 		range: horizontalcolors
 						}
 					}
-				}
+				},
+				
 			}]
 		end
 
@@ -313,14 +394,6 @@ module VGHelper
 		############################
 		# filtering parameter settings
 		############################
-
-		# categ_params = categories.map do |c|
-		#   {
-		# 	name: "show_#{c}",
-		# 	value: true,
-		# 	bind: { input: "checkbox", name: c }
-		#   }
-		# end
 
 		params = []
 
@@ -393,9 +466,9 @@ module VGHelper
 			]
 		end
 		
-		categ_params = categories.map do |c|
+		categ_params = categories.map.with_index do |c, i|
 			ctp = {
-				name: "show_#{c}",
+				name: "show_#{i}",
 				value: true
 			}
 
@@ -411,7 +484,9 @@ module VGHelper
 
 		params += categ_params
 		
-		categ_transforms = categories.map {|c| "(show_#{c} && datum.#{category_col} == '#{c}')" }.join(" || ")
+		categ_transforms = categories.map.with_index {|c, i|
+			 "(show_#{i} && datum[#{category_col.to_s.to_json}] == #{c.to_s.to_json})" }
+		.join(" || ")
 		
 		# 第二縦軸
 		bar_layer = []
@@ -478,11 +553,12 @@ module VGHelper
 					field: y_col,
 					type: "quantitative",
 					title: y_col,
-					axis: { 
-						orient: reverse_orient ? :right : :left,
-						titleFontSize: 16,
-						labelFontSize: 14
-					},
+					axis: main_y_axis,
+					# axis: {
+					#	orient: reverse_orient ? :right : :left,
+					#	titleFontSize: 16,
+					#	labelFontSize: 14
+					#},
 					scale: { domain: [{expr: "min_y"}, {expr: "max_y"}] }
 				},
 				color: {
@@ -726,15 +802,28 @@ module VGHelper
 		# Mark settings
 		############################
 
-		markkind = {
-			type: "line",
-			tooltip: true,
-			point: {
-			filled: false,
-			size: 20
-			},
-			clip: true
-		}.merge(markkind || {})
+		# markkind = {
+		#	type: "line",
+		#	tooltip: true,
+		#	point: {
+		#	filled: false,
+		#	size: 20
+		#	},
+		#	clip: true
+		# }.merge(markkind || {})
+
+		markkind =
+		case markkind
+			when nil
+				mark_preset(:line_dot)
+			when Symbol
+				mark_preset(markkind)
+			when Hash
+				markkind
+			else
+				raise ArgumentError,
+				"markkind must be a Symbol or Hash"
+		end
 
 		############################
 		# Main dataframe
@@ -1041,9 +1130,9 @@ module VGHelper
 
 		if category_check
 			category_params =
-			categories.map do |c|
+			categories.map.with_index do |c, i|
 				{
-				name: "show_#{c}",
+				name: "show_#{i}",
 				value: true,
 				bind: {
 					input: "checkbox",
@@ -1055,8 +1144,8 @@ module VGHelper
 			params += category_params
 
 			categ_filter_str =
-			categories.map do |c|
-				"(show_#{c} && datum['#{category_col_str}'] == '#{c}')"
+			categories.map.with_index do |c, i|
+				"(show_#{i} && datum[#{category_col_str.to_s.to_json}] == #{c.to_s.to_json})"
 			end.join(" || ")
 
 			category_transforms = [
@@ -1066,6 +1155,16 @@ module VGHelper
 			}
 			]
 		end
+
+		############################
+		# Y Axises
+		############################
+		
+		main_y_axis = {
+			orient: reverse_orient ? :right : :left,
+			titleFontSize: 16,
+			labelFontSize: 14
+		}
 
 		############################
 		# Common X encoding
@@ -1183,7 +1282,8 @@ module VGHelper
 				y: {
 					field: y_col_str,
 					type: "quantitative",
-					scale: { domain: ydomain }
+					scale: { domain: ydomain },
+					axis: main_y_axis
 					#axis: nil 
 				},
 				color: {
@@ -1295,27 +1395,15 @@ module VGHelper
 				field:
 				y_col_str,
 
-				type:
-				"quantitative",
-
-				axis: {
-				orient:
-					reverse_orient ? :right : :left,
-
-				title:
-					y_col_str,
-
-				titleFontSize:
-					16,
-
-				labelFontSize:
-					14
-				},
-
-				scale: {
-				domain:
-					ydomain
-				}
+				type: "quantitative",
+				# axis: {
+				#	orient: reverse_orient ? :right : :left,
+				#	title: y_col_str,
+				#	titleFontSize: 16,
+				#	labelFontSize: 14,
+				# },
+				axis: main_y_axis, 
+				scale: { domain: ydomain }
 			},
 
 			color: {
