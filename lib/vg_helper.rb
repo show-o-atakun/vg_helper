@@ -743,7 +743,10 @@ module VGHelper
 			axis: { x: "shared" }
 			)
 
-		builder
+		builder.embed_options(
+			actions: { export: true, source: false, compiled: false, editor: false },
+			scaleFactor: { png: 2, svg: 1 }
+		)
 		
 	end
 	
@@ -1643,7 +1646,10 @@ module VGHelper
 			scale: resolve_scale
 			)
 
-		builder
+		builder.embed_options(
+			actions: { export: true, source: false, compiled: false, editor: false },
+			scaleFactor: { png: 2, svg: 1 }
+		)
 	end
 
 	def write_htmls(charts, out)
@@ -1662,7 +1668,7 @@ module VGHelper
 		]
 
 		vegas_lines = vegas.map { |vf|
-		"<script>#{File.read(vf, encoding: 'cp932')}</script>"
+		"<script>#{File.read(vf, encoding: 'utf-8')}</script>"
 		}.join("\n")
 
 		## header, footer (No Slider Caption)
@@ -1696,7 +1702,7 @@ module VGHelper
 		FOOT
 
 		## save
-		open(out, "w") do |o|
+		File.open(out, "w:utf-8") do |o|
 			o.write html_head
 			[charts].flatten.each { o.write _1 }
 			o.write html_foot
