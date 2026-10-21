@@ -40,6 +40,7 @@ these libraries from an external CDN.
 - Daily and exact-time modes for temporal data
 - Reversible left/right y-axis orientation
 - Self-contained offline HTML output
+- Export the current chart as PNG (2x resolution) or SVG
 - No CDN access required for generated HTML
 
 ---
@@ -623,13 +624,52 @@ VGHelper.write_htmls(
 ---
 
 
+# Saving charts as images
+
+Charts created by `draw_xdate` and `draw_xnominal` have an actions menu
+(the three dots at the top right). Select **Save as PNG** or **Save as SVG**
+to download the chart currently displayed.
+
+- PNG exports use 2x resolution for clearer text and lines.
+- SVG exports retain vector graphics for resizing.
+- Changes to the axis ranges, category visibility, and brush selection are
+  reflected in the export, including the statistics drawn inside the chart.
+- Sliders, checkboxes, and the actions menu are HTML controls and are not
+  included in the image.
+
+This works in the HTML files produced by `write_htmls` using the bundled
+runtimes, without a CDN, server, Node.js, or extra gems. The export menu is
+also enabled in IRuby output; notebook runtime loading follows the `vega`
+gem's existing behavior.
+
+```ruby
+VGHelper.write_htmls(chart, "chart.html")
+# Open chart.html, adjust the chart, then use the three-dot menu to save it.
+```
+
+To customize the export resolution or hide the menu, use the `vega` gem's
+`embed_options` method. It returns a new chart:
+
+```ruby
+chart = chart.embed_options(
+  actions: { export: true, source: false, compiled: false, editor: false },
+  scaleFactor: { png: 3, svg: 1 }
+)
+# Or: chart = chart.embed_options(actions: false)
+```
+
+This feature saves images from the browser. It does not add a Ruby method
+for writing image files directly.
+
+---
+
 # TODO
 
 VGHelper is still under development.
 
 Planned features include:
 
-- [ ] Export charts as images
+- [x] Export charts as images from the browser
 - [ ] Improve customization of Vega-Lite parameters
 - [ ] Improve documentation and examples
 
