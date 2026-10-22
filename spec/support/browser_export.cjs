@@ -52,8 +52,10 @@ const { chromium } = require('playwright');
       await page.locator('summary').click();
       assert.equal(await page.locator('.vega-actions a').count(), 2);
       for (const format of ['png', 'svg']) {
+        const action = page.getByText('Save as ' + format.toUpperCase(), { exact: true });
+        if (!(await action.isVisible())) await page.locator('summary').click();
         const downloadEvent = page.waitForEvent('download');
-        await page.getByText('Save as ' + format.toUpperCase(), { exact: true }).click();
+        await action.click();
         const download = await downloadEvent;
         assert(download.suggestedFilename().endsWith('.' + format));
         const bytes = await fs.readFile(await download.path());
