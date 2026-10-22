@@ -1,0 +1,32 @@
+name: Tests
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Install Ruby dependencies
+        run: |
+          bundle lock --add-platform ruby
+          bundle install
+      - run: bundle exec rspec
+      - name: Build browser fixtures from the Ruby helpers
+        run: bundle exec ruby -Ilib spec/support/browser_fixtures.rb tmp/browser
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/vg-helper-browser" playwright
+          node "$RUNNER_TEMP/vg-helper-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Check offline chart rendering and image downloads
+        run: NODE_PATH="$RUNNER_TEMP/vg-helper-browser/node_modules" node spec/support/browser_export.cjs tmp/browser
