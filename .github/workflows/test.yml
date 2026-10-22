@@ -37,3 +37,10 @@ jobs:
           node "$RUNNER_TEMP/vg-helper-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Check offline chart rendering and image downloads
         run: NODE_PATH="$RUNNER_TEMP/vg-helper-browser/node_modules" node spec/support/browser_export.cjs tmp/browser
+      - name: Save generated charts and images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vg-helper-chart-examples
+          path: tmp/browser/
+          retention-days: 14
