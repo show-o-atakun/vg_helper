@@ -1,14 +1,26 @@
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-22
+
 ### Added
 
 - Enable PNG (2x resolution) and SVG downloads from the actions menu for
   date and nominal charts, including offline HTML and IRuby output.
+- Add `VGHelper.to_html` for editable standalone HTML strings; delegate
+  `write_htmls` to it.
+- Warn with column names and counts for NaN in either DataFrame. Retain
+  rows and original inputs, using null only in the generated chart data.
+- Add `miny2` / `maxy2` for explicit secondary-axis domains.
+- Add first-axis category stacking for bars with stack-aware bounds and
+  statistics; `stack: false` disables stacking.
+- Add `markkind2` for secondary-axis presets and custom marks, keeping
+  bars as the default. Line and point statistics use observations.
 
 ### Fixed
 
 - Read bundled JavaScript and write standalone HTML as UTF-8 to preserve
   runtime strings and Japanese chart text.
+- Normalize numeric categories and explicit category lists to strings.
 
 ## [0.1.0] - 2026-08-13
 
