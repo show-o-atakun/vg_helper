@@ -173,6 +173,21 @@ chart = VGHelper.draw_xdate(
 The fourth argument specifies the column used to separate the data
 into series.
 
+Category values and an explicit `categories:` list are normalized to
+strings internally, including numeric categories. The input DataFrames
+are not modified. This applies to both chart helpers and both axes.
+
+## NaN warnings
+
+Before preparing either DataFrame, VGHelper warns on standard error with
+the DataFrame name (`df` or `df2`), column name, and number of NaN values.
+No rows are dropped and the original DataFrame remains unchanged.
+Since JSON cannot represent NaN, those cells become `null` only in the
+generated chart data. Vega-Lite handles them as missing values. This is
+not imputation: VGHelper does not replace missing measurements with zero.
+An all-missing measure uses a fallback axis range of `[0, 1]`; a date
+chart with no valid x values raises `ArgumentError` after warning.
+
 ---
 
 ## Multiple category columns
@@ -437,6 +452,31 @@ chart = VGHelper.draw_xdate(
 This produces a main chart together with bars using an independent
 y scale.
 
+## Secondary marks and axis limits
+
+Use `markkind2:` to choose a secondary mark. The default remains bars;
+`:line`, `:line_dot`, `:point` (an alias for `:small_dot`), `:large_dot`,
+and custom mark hashes are also supported.
+
+```ruby
+chart = VGHelper.draw_xdate(
+  df, "datetime", "temperature", "station",
+  df2: pressure_df, x2_col: "datetime", y2_col: "pressure",
+  markkind2: :line_dot,
+  miny2: 900, maxy2: 1100
+)
+```
+
+`miny2:` and `maxy2:` set the secondary scale's domain. An omitted bound
+is inferred from its data. Bar bounds include zero and account for
+positive and negative stacked heights; line and point bounds use
+individual observations. Explicit secondary limits are not expanded
+by scale rounding or zero inclusion. These options also work with
+`draw_xnominal` and `reverse_orient: true`.
+
+Secondary bar statistics use one stacked total per x position. Secondary
+line and point statistics use individual observations.
+
 ---
 
 ## Stacked secondary-axis bars
@@ -578,6 +618,23 @@ markkind: {
 This allows VGHelper to expose Vega-Lite's mark configuration while
 providing convenient defaults.
 
+## Stacked bars on the main axis
+
+```ruby
+chart = VGHelper.draw_xnominal(
+  df, "step", "value", "category",
+  markkind: :bar
+)
+```
+
+Main-axis bars stack by category at each x position by default. The
+automatic y range includes the full positive and negative stack heights,
+and statistics use each x position's total as one observation. Category
+visibility and brush selection are applied before calculating totals.
+
+Use `stack: false` for overlapping, unstacked main-axis bars. Lines and
+points remain unstacked and use individual observations for statistics.
+
 ---
 
 # Offline HTML output
@@ -620,6 +677,23 @@ VGHelper.write_htmls(
   "charts.html"
 )
 ```
+
+## Get the HTML string without saving a file
+
+`VGHelper.to_html` returns the same standalone HTML document, with the
+bundled runtimes, for one chart or an array of charts:
+
+```ruby
+html = VGHelper.to_html([chart1, chart2])
+html = html.sub("</head>", "<style>body { margin: 2rem; }</style></head>")
+File.write("custom-charts.html", html, encoding: "utf-8")
+```
+
+You can insert your own CSS or JavaScript before serving or saving the
+string. `write_htmls(charts, out)` now delegates to `to_html(charts)` and
+writes its result as UTF-8. This module method returns a full document;
+the `vega` chart object's existing `chart.to_html` returns its embed
+fragment.
 
 ---
 
