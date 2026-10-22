@@ -42,6 +42,7 @@ const { chromium } = require('playwright');
       assert(before.includes('avg: 35.00'), fixture.name + ': main-axis stacked statistics');
       assert(before.includes(fixture.stacked_secondary ? 'avg: 212.50' : 'avg: 106.25'), fixture.name + ': second-axis statistics');
       assert(before.includes('測定結果'));
+      await page.screenshot({ path: path.join(directory, fixture.name + '.preview.png'), fullPage: true });
 
       await page.locator('input[type="checkbox"]').nth(1).uncheck();
       await page.waitForFunction(async () => (await window.chartView.toSVG()).includes('avg: 15.00'));
@@ -59,6 +60,7 @@ const { chromium } = require('playwright');
         const download = await downloadEvent;
         assert(download.suggestedFilename().endsWith('.' + format));
         const bytes = await fs.readFile(await download.path());
+        await download.saveAs(path.join(directory, fixture.name + '.selected.' + format));
         if (format === 'png') {
           assert.equal(bytes.subarray(1, 4).toString(), 'PNG');
           assert.equal(bytes.readUInt32BE(16), dimensions.width * 2);
