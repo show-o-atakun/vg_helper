@@ -38,6 +38,7 @@ module VGHelper
 	end
 
 	def msec_to_s(msec, mode = :day)
+		return nil if msec.nil?
 		t = Time.at(msec / 1000.0).getlocal
 
 		case mode
@@ -51,6 +52,7 @@ module VGHelper
 	end
 
 	def floor_day_msec(msec)
+		return nil if msec.nil?
 		t = Time.at(msec / 1000.0).getlocal
 		Time.local(t.year, t.month, t.day).to_i * 1000
 	end
@@ -75,7 +77,7 @@ module VGHelper
 			clip: true
 			}
 
-		when :small_dot
+		when :small_dot, :point
 			{
 			type: "point",
 			filled: true,
@@ -109,14 +111,83 @@ module VGHelper
 		end
 	end
 
+	# Keep the caller's dataframe and rows intact. JSON has no NaN value, so
+	# only the generated chart data uses null in its place.
+	def warn_nan(df, label)
+		counts = Hash.new(0)
+		df.to_a.each do |row|
+			row.each { |column, value| counts[column] += 1 if nan_value?(value) }
+		end
+		counts.each do |column, count|
+			warn "VGHelper: #{label} column #{column.to_s.inspect} contains #{count} NaN value(s); rendering as null (rows retained)."
+		end
+	end
+
+	def nan_value?(value)
+		value.respond_to?(:nan?) && value.nan?
+	end
+
+	def chart_row(row)
+		row.to_h.transform_keys(&:to_s).transform_values { |value| nan_value?(value) ? nil : value }
+	end
+
+	def chart_mark(mark, default = :line_dot)
+		case mark
+		when nil then mark_preset(default)
+		when Symbol then mark_preset(mark)
+		when Hash then mark.transform_keys(&:to_sym)
+		else raise ArgumentError, "markkind must be a Symbol or Hash"
+		end
+	end
+
+	def stacked_bar?(mark, stack)
+		stack && mark[:type].to_s == "bar"
+	end
+
+	def data_domain(rows, field, x_field, stacked: false, zero: false)
+		values = if stacked
+			rows.group_by { |row| row[x_field] }.values.flat_map do |group|
+				numbers = group.map { |row| row[field] }.compact
+				[numbers.select { |v| v < 0 }.sum, numbers.select { |v| v > 0 }.sum]
+			end
+		else
+			rows.map { |row| row[field] }.compact
+		end
+		values << 0 if zero || stacked
+		values.empty? ? [0, 1] : values.minmax
+	end
+
+	# Statistics must follow the displayed mark: stacked totals for bars,
+	# individual observations for lines and points.
+	def configure_statistics!(layer, field, x_field, stacked)
+		transforms = layer[:transform]
+		transforms.reject! { |item| item[:aggregate] && item[:groupby] }
+		stats = transforms.find { |item| item[:aggregate] }
+		if stacked
+			index = transforms.index(stats)
+			transforms.insert(index, { aggregate: [{ op: "sum", field: field, as: "_vg_stack_total" }], groupby: [x_field] })
+		end
+		stats[:aggregate].reject! { |item| ["xmin", "xmax"].include?(item[:as]) }
+		stats[:aggregate].each do |item|
+			item[:field] = stacked ? "_vg_stack_total" : field unless item[:op] == "count"
+		end
+	end
+
+	def secondary_scale(rows, field, x_field, mark, miny2, maxy2)
+		bounds = data_domain(rows, field, x_field, stacked: mark[:type].to_s == "bar", zero: mark[:type].to_s == "bar")
+		domain = [miny2.nil? ? bounds[0] : miny2, maxy2.nil? ? bounds[1] : maxy2]
+		raise ArgumentError, "miny2 must not exceed maxy2" if domain[0] > domain[1]
+		{ domain: domain, zero: false, nice: false }
+	end
+
 	def draw_xdate(df, x_col, y_col, category_col,
 				   df2: nil, x2_col: nil, y2_col: nil, y2_category_col: nil,
 				   horizontallines: [], horizontalcolors: nil,
 				   verticallines: [], verticalcolors: nil,
 				   minxdefault: nil, maxxdefault: nil,
 				   minx: nil, maxx: nil,
-				   miny: nil, maxy: nil,
-				   markkind: nil, colorset: nil,
+				   miny: nil, maxy: nil, miny2: nil, maxy2: nil,
+				   markkind: nil, markkind2: nil, stack: true, colorset: nil,
 				   xslide: true,
 				   yslide: true,
 				   category_check: true,
@@ -128,6 +199,8 @@ module VGHelper
 
 		x_col = x_col.to_s
 		y_col = y_col.to_s
+		warn_nan(df, "df")
+		warn_nan(df2, "df2") if df2
 
 		
 		############################
@@ -146,7 +219,8 @@ module VGHelper
 		# Default Settings
 		############################
 		
-		categories ||= values1[category_col].to_a.uniq
+		values1[category_col] = values1[category_col].to_a.map(&:to_s)
+		categories = (categories || values1[category_col].to_a).map(&:to_s).uniq
 
 		#markkind ||= {
 		#	type: "line",
@@ -155,18 +229,9 @@ module VGHelper
 		#	clip: true
 		#}
 
-		markkind =
-		case markkind
-			when nil
-				mark_preset(:line_dot)
-			when Symbol
-				mark_preset(markkind)
-			when Hash
-				markkind
-			else
-				raise ArgumentError,
-				"markkind must be a Symbol or Hash"
-		end
+		markkind = chart_mark(markkind)
+		markkind2 = markkind2.nil? ? mark_preset(:bar).merge(opacity: 0.55, size: 24) : chart_mark(markkind2, :bar)
+		main_stack = stacked_bar?(markkind, stack)
 
 
 		title ||= y_col
@@ -179,7 +244,7 @@ module VGHelper
 		verticalcolors ||= (["#0000ff", "#ff0000"] * 6)[0...(verticallines.length)]
 		# colorset += verticalcolors
 
-		x1_msec = values1[x_col].to_a.map { |v| udate(v) }
+		x1_msec = values1[x_col].to_a.map { |v| v.nil? || nan_value?(v) ? nil : udate(v) }
 
 		if time_mode == :day
 			x1_msec.map! { |v| floor_day_msec(v) }
@@ -191,7 +256,7 @@ module VGHelper
 		values1["dummy"] = "none"
 
 		v1_array = values1.to_a.map do |row|
-			r = row.transform_keys(&:to_s)
+			r = chart_row(row)
 			r["_x_date_str"] = msec_to_s(r[x_col], time_mode)
 			r["_data_src"] = "main"
 			r
@@ -206,14 +271,15 @@ module VGHelper
 		x2_msec = []
 		if df2 && y2_col
 			v2 = df2.dup
-			x2_msec = v2[x2_col].to_a.map { |v| udate(v) }
+			x2_msec = v2[x2_col].to_a.map { |v| v.nil? || nan_value?(v) ? nil : udate(v) }
 
 			if time_mode == :day
 				x2_msec.map! { |v| floor_day_msec(v) }
 			end
 
 			v2[x2_col] = x2_msec
-			v2[y2_col] = v2[y2_col].to_a.map { |v| v.to_f }
+			v2[y2_col] = v2[y2_col].to_a.map { |v| v.nil? ? nil : v.to_f }
+			v2[y2_category_col] = v2[y2_category_col].to_a.map(&:to_s) if y2_category_col
 
 			select_cols2 = [x2_col, y2_col]
 			select_cols2 << y2_category_col if y2_category_col
@@ -221,7 +287,7 @@ module VGHelper
 
 			raw_v2 = v2.is_a?(Rover::DataFrame) ? v2.to_a : v2
 			v2_array = raw_v2.map do |row|
-				r = row.transform_keys(&:to_s)
+				r = chart_row(row)
 				r["_x_date_str"] = msec_to_s(r[x2_col], time_mode)
 				r["_data_src"] = "bar"
 				r
@@ -234,13 +300,9 @@ module VGHelper
 
 		# x range
 
-		if !v2_array.empty?
-			all_x_min = [x1_msec.min, x2_msec.min].min
-			all_x_max = [x1_msec.max, x2_msec.max].max
-		else
-			all_x_min = x1_msec.min
-			all_x_max = x1_msec.max
-		end
+		all_x = (x1_msec + x2_msec).compact
+		raise ArgumentError, "no valid x values to draw" if all_x.empty?
+		all_x_min, all_x_max = all_x.minmax
 
 		if time_mode == :day
 			all_x_min = floor_day_msec(all_x_min)
@@ -255,8 +317,9 @@ module VGHelper
 
 		# y range
 
-		miny ||= values1[y_col].min
-		maxy ||= values1[y_col].max
+		bounds = data_domain(v1_array, y_col, "_x_date_str", stacked: main_stack, zero: markkind[:type].to_s == "bar")
+		miny ||= bounds[0]
+		maxy ||= bounds[1]
 		
 		if !horizontallines.empty?
 			horizmin = horizontallines.map { _1[0] }.min
@@ -317,7 +380,7 @@ module VGHelper
 		# 水平線データの構築
 		horiz_layer = []
 		if horizontallines && !horizontallines.empty?
-			x_vals_for_horiz = (values1[x_col].to_a + [minxdefault, maxxdefault]).uniq.sort
+			x_vals_for_horiz = (x1_msec + [minxdefault, maxxdefault]).compact.uniq.sort
 			
 			horizontallines.each do |hv|
 				horiz_rows = x_vals_for_horiz.map do |x_val|
@@ -525,7 +588,7 @@ module VGHelper
 			end
 
 			bar_layer = [{
-				mark: {type: "bar", opacity: 0.55, size: 24, clip: true },
+				mark: markkind2,
 				transform: [
 					{ filter: "datum['_data_src'] == 'bar'" }
 				],
@@ -722,6 +785,13 @@ module VGHelper
 		end
 
 		layers = bar_layer + horiz_layer + vertical_layer + main_layer + info_layer1 + info_layer2
+		main_layer[0][:encoding][:y][:stack] = main_stack ? "zero" : nil if markkind[:type].to_s == "bar"
+		configure_statistics!(info_layer1[0], y_col, "_x_date_str", main_stack)
+		unless bar_layer.empty?
+			bar_layer[0][:encoding][:y][:scale] = secondary_scale(v2_array, y2_col, "_x_date_str", markkind2, miny2, maxy2)
+			bar_layer[0][:encoding][:y][:stack] = "zero" if markkind2[:type].to_s == "bar"
+			configure_statistics!(info_layer2[0], y2_col, "_x_date_str", markkind2[:type].to_s == "bar")
+		end
 
 		builder = Vega.lite
 			.title(title)
@@ -755,9 +825,10 @@ module VGHelper
 		df2: nil, x2_col: nil, y2_col: nil, y2_category_col: nil,
 		categories: nil,
 		miny: nil, maxy: nil,
+		miny2: nil, maxy2: nil,
 		minydefault: nil, maxydefault: nil,
 		initialxpoints: 300,
-		markkind: nil,
+		markkind: nil, markkind2: nil, stack: true,
 		colorset: nil,
 		yrangechanger: "number",
 		horizontallines: [],
@@ -776,6 +847,8 @@ module VGHelper
 		############################
 		# Column settings
 		############################
+		warn_nan(df, "df")
+		warn_nan(df2, "df2") if df2
 
 		x_col_str =
 			x_col.is_a?(Array) ? "multix" : x_col.to_s
@@ -815,18 +888,9 @@ module VGHelper
 		#	clip: true
 		# }.merge(markkind || {})
 
-		markkind =
-		case markkind
-			when nil
-				mark_preset(:line_dot)
-			when Symbol
-				mark_preset(markkind)
-			when Hash
-				markkind
-			else
-				raise ArgumentError,
-				"markkind must be a Symbol or Hash"
-		end
+		markkind = chart_mark(markkind)
+		markkind2 = markkind2.nil? ? mark_preset(:bar).merge(opacity: 0.55, size: 24) : chart_mark(markkind2, :bar)
+		main_stack = stacked_bar?(markkind, stack)
 
 		############################
 		# Main dataframe
@@ -844,11 +908,8 @@ module VGHelper
 			dfdup[category_col].to_a.map { _1.values.join("_") }
 		end
 
-		categories ||=
-			dfdup[category_col_str]
-			.uniq
-			.to_a
-			.map(&:to_s)
+		dfdup[category_col_str] = dfdup[category_col_str].to_a.map(&:to_s)
+		categories = (categories || dfdup[category_col_str].to_a).map(&:to_s).uniq
 
 		############################
 		# Second dataframe
@@ -867,6 +928,9 @@ module VGHelper
 			if y2_category_col.is_a?(Array)
 			df2dup["multicategory2"] =
 				df2dup[y2_category_col].to_a.map { _1.values.join("_") }
+			end
+			if y2_category_col_str
+				df2dup[y2_category_col_str] = df2dup[y2_category_col_str].to_a.map(&:to_s)
 			end
 		end
 
@@ -898,7 +962,7 @@ module VGHelper
 
 		v1_array =
 			dfdup.to_a.map do |row|
-			r = row.transform_keys(&:to_s)
+			r = chart_row(row)
 
 			x_value =
 				r[x_col_str].to_s
@@ -919,14 +983,14 @@ module VGHelper
 		if df2dup
 			v2_array =
 			df2dup.to_a.map do |row|
-				r = row.transform_keys(&:to_s)
+				r = chart_row(row)
 
 				x_value =
 				r[x2_col_str].to_s
 
 				r["_x_value"] = x_value
 				r[y2_col_str] =
-				r[y2_col_str].to_f
+				r[y2_col_str].nil? ? nil : r[y2_col_str].to_f
 
 				r["_order"] =
 				xcsh[x_value]
@@ -985,8 +1049,9 @@ module VGHelper
 		# Y range
 		############################
 
-		miny ||= dfdup[y_col_str].min
-		maxy ||= dfdup[y_col_str].max
+		bounds = data_domain(v1_array, y_col_str, "_x_value", stacked: main_stack, zero: markkind[:type].to_s == "bar")
+		miny ||= bounds[0]
+		maxy ||= bounds[1]
 
 		unless horizontallines.empty?
 			horiz_min =
@@ -1238,12 +1303,7 @@ module VGHelper
 			end
 
 			layers << {
-			mark: {
-				type: "bar",
-				opacity: 0.55,
-				size: 24,
-				clip: true
-			},
+			mark: markkind2,
 
 			transform:
 				xslide_transform +
@@ -1625,6 +1685,16 @@ module VGHelper
 		############################
 		# Build
 		############################
+		main_layer = layers.find { |layer| layer[:selection] }
+		main_layer[:encoding][:y][:stack] = main_stack ? "zero" : nil if markkind[:type].to_s == "bar"
+		info_layers = layers.select { |layer| layer.dig(:mark, :type) == "text" }
+		configure_statistics!(info_layers[0], y_col_str, "_x_value", main_stack)
+		unless v2_array.empty?
+			secondary_layer = layers[0]
+			secondary_layer[:encoding][:y][:scale] = secondary_scale(v2_array, y2_col_str, "_x_value", markkind2, miny2, maxy2)
+			secondary_layer[:encoding][:y][:stack] = "zero" if markkind2[:type].to_s == "bar"
+			configure_statistics!(info_layers[1], y2_col_str, "_x_value", markkind2[:type].to_s == "bar")
+		end
 		
 		builder =
 			Vega.lite
@@ -1652,7 +1722,7 @@ module VGHelper
 		)
 	end
 
-	def write_htmls(charts, out)
+	def to_html(charts)
 		## set .js
 		#thedir = __dir__
 		#
@@ -1701,12 +1771,11 @@ module VGHelper
 		</html>
 		FOOT
 
-		## save
-		File.open(out, "w:utf-8") do |o|
-			o.write html_head
-			[charts].flatten.each { o.write _1 }
-			o.write html_foot
-		end
+		html_head + [charts].flatten.map(&:to_s).join("\n") + html_foot
+	end
+
+	def write_htmls(charts, out)
+		File.write(out, to_html(charts), encoding: "utf-8")
 	end
 
 end
