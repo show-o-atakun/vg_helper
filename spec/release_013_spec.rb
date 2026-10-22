@@ -66,6 +66,16 @@ RSpec.describe "VGHelper 0.1.3" do
         expect { parsed(draw) }.to output(/column "y" contains 4 NaN.*column "unused" contains 1 NaN/m).to_stderr
       end
 
+      it "retains missing-category rows as null without changing the numeric input" do
+        df["category"] = [1.0, Float::NAN, 2.0, 2.0]
+        chart = nil
+        expect { chart = draw }.to output(/column "category" contains 1 NaN/).to_stderr
+        rows = parsed(chart).fetch("data").fetch("values")
+        expect(rows.count { |r| r["category"].nil? }).to eq(1)
+        expect(rows.length).to eq(4)
+        expect(df["category"].to_a[1]).to be_nan
+      end
+
       it "uses stacked totals for the first bar axis range and statistics" do
         spec = parsed(draw(markkind: :bar))
         expect(main_layer(spec).dig("encoding", "y", "stack")).to eq("zero")
