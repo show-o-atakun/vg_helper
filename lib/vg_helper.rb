@@ -131,6 +131,10 @@ module VGHelper
 		row.to_h.transform_keys(&:to_s).transform_values { |value| nan_value?(value) ? nil : value }
 	end
 
+	def category_value(value)
+		value.nil? || nan_value?(value) ? nil : value.to_s
+	end
+
 	def chart_mark(mark, default = :line_dot)
 		case mark
 		when nil then mark_preset(default)
@@ -145,6 +149,7 @@ module VGHelper
 	end
 
 	def data_domain(rows, field, x_field, stacked: false, zero: false)
+		return [0, 1] if rows.none? { |row| !row[field].nil? }
 		values = if stacked
 			rows.group_by { |row| row[x_field] }.values.flat_map do |group|
 				numbers = group.map { |row| row[field] }.compact
@@ -219,8 +224,8 @@ module VGHelper
 		# Default Settings
 		############################
 		
-		values1[category_col] = values1[category_col].to_a.map(&:to_s)
-		categories = (categories || values1[category_col].to_a).map(&:to_s).uniq
+		values1[category_col] = values1[category_col].to_a.map { |v| category_value(v) }
+		categories = (categories || values1[category_col].to_a).map { |v| category_value(v) }.compact.uniq
 
 		#markkind ||= {
 		#	type: "line",
@@ -279,7 +284,7 @@ module VGHelper
 
 			v2[x2_col] = x2_msec
 			v2[y2_col] = v2[y2_col].to_a.map { |v| v.nil? ? nil : v.to_f }
-			v2[y2_category_col] = v2[y2_category_col].to_a.map(&:to_s) if y2_category_col
+			v2[y2_category_col] = v2[y2_category_col].to_a.map { |v| category_value(v) } if y2_category_col
 
 			select_cols2 = [x2_col, y2_col]
 			select_cols2 << y2_category_col if y2_category_col
@@ -550,6 +555,7 @@ module VGHelper
 		categ_transforms = categories.map.with_index {|c, i|
 			 "(show_#{i} && datum[#{category_col.to_s.to_json}] == #{c.to_s.to_json})" }
 		.join(" || ")
+		categ_transforms = "false" if categ_transforms.empty?
 		
 		# 第二縦軸
 		bar_layer = []
@@ -908,8 +914,8 @@ module VGHelper
 			dfdup[category_col].to_a.map { _1.values.join("_") }
 		end
 
-		dfdup[category_col_str] = dfdup[category_col_str].to_a.map(&:to_s)
-		categories = (categories || dfdup[category_col_str].to_a).map(&:to_s).uniq
+		dfdup[category_col_str] = dfdup[category_col_str].to_a.map { |v| category_value(v) }
+		categories = (categories || dfdup[category_col_str].to_a).map { |v| category_value(v) }.compact.uniq
 
 		############################
 		# Second dataframe
@@ -930,7 +936,7 @@ module VGHelper
 				df2dup[y2_category_col].to_a.map { _1.values.join("_") }
 			end
 			if y2_category_col_str
-				df2dup[y2_category_col_str] = df2dup[y2_category_col_str].to_a.map(&:to_s)
+				df2dup[y2_category_col_str] = df2dup[y2_category_col_str].to_a.map { |v| category_value(v) }
 			end
 		end
 
@@ -1215,6 +1221,7 @@ module VGHelper
 			categories.map.with_index do |c, i|
 				"(show_#{i} && datum[#{category_col_str.to_s.to_json}] == #{c.to_s.to_json})"
 			end.join(" || ")
+			categ_filter_str = "false" if categ_filter_str.empty?
 
 			category_transforms = [
 			{
