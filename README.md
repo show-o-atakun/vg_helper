@@ -40,11 +40,39 @@ these libraries from an external CDN.
 - Daily and exact-time modes for temporal data
 - Reversible left/right y-axis orientation
 - Self-contained offline HTML output
+- Export the current chart as PNG (2x resolution) or SVG
 - No CDN access required for generated HTML
 
 ---
 
 ## Installation
+
+### Preview release: 0.1.3.pre.1
+
+The changes described here are being prepared as a prerelease for testing
+with real data. Once it is published to RubyGems.org, install it explicitly:
+
+```sh
+gem install vg_helper -v 0.1.3.pre.1
+```
+
+Or pin it in your Gemfile:
+
+```ruby
+gem "vg_helper", "0.1.3.pre.1"
+```
+
+Ordinary installs do not select this prerelease. To test an unpublished
+build, download `vg-helper-gem` from a successful GitHub Actions run,
+extract the ZIP, and install its gem file:
+
+```sh
+gem install --local vg_helper-0.1.3.pre.1.gem
+```
+
+See [RELEASING.md](RELEASING.md) for packaging and publication instructions.
+
+### Stable release
 
 Add this line to your application's Gemfile:
 
@@ -171,6 +199,21 @@ chart = VGHelper.draw_xdate(
 
 The fourth argument specifies the column used to separate the data
 into series.
+
+Category values and an explicit `categories:` list are normalized to
+strings internally, including numeric categories. The input DataFrames
+are not modified. This applies to both chart helpers and both axes.
+
+## NaN warnings
+
+Before preparing either DataFrame, VGHelper warns on standard error with
+the DataFrame name (`df` or `df2`), column name, and number of NaN values.
+No rows are dropped and the original DataFrame remains unchanged.
+Since JSON cannot represent NaN, those cells become `null` only in the
+generated chart data. Vega-Lite handles them as missing values. This is
+not imputation: VGHelper does not replace missing measurements with zero.
+An all-missing measure uses a fallback axis range of `[0, 1]`; a date
+chart with no valid x values raises `ArgumentError` after warning.
 
 ---
 
@@ -436,6 +479,31 @@ chart = VGHelper.draw_xdate(
 This produces a main chart together with bars using an independent
 y scale.
 
+## Secondary marks and axis limits
+
+Use `markkind2:` to choose a secondary mark. The default remains bars;
+`:line`, `:line_dot`, `:point` (an alias for `:small_dot`), `:large_dot`,
+and custom mark hashes are also supported.
+
+```ruby
+chart = VGHelper.draw_xdate(
+  df, "datetime", "temperature", "station",
+  df2: pressure_df, x2_col: "datetime", y2_col: "pressure",
+  markkind2: :line_dot,
+  miny2: 900, maxy2: 1100
+)
+```
+
+`miny2:` and `maxy2:` set the secondary scale's domain. An omitted bound
+is inferred from its data. Bar bounds include zero and account for
+positive and negative stacked heights; line and point bounds use
+individual observations. Explicit secondary limits are not expanded
+by scale rounding or zero inclusion. These options also work with
+`draw_xnominal` and `reverse_orient: true`.
+
+Secondary bar statistics use one stacked total per x position. Secondary
+line and point statistics use individual observations.
+
 ---
 
 ## Stacked secondary-axis bars
@@ -577,6 +645,23 @@ markkind: {
 This allows VGHelper to expose Vega-Lite's mark configuration while
 providing convenient defaults.
 
+## Stacked bars on the main axis
+
+```ruby
+chart = VGHelper.draw_xnominal(
+  df, "step", "value", "category",
+  markkind: :bar
+)
+```
+
+Main-axis bars stack by category at each x position by default. The
+automatic y range includes the full positive and negative stack heights,
+and statistics use each x position's total as one observation. Category
+visibility and brush selection are applied before calculating totals.
+
+Use `stack: false` for overlapping, unstacked main-axis bars. Lines and
+points remain unstacked and use individual observations for statistics.
+
 ---
 
 # Offline HTML output
@@ -620,8 +705,64 @@ VGHelper.write_htmls(
 )
 ```
 
+## Get the HTML string without saving a file
+
+`VGHelper.to_html` returns the same standalone HTML document, with the
+bundled runtimes, for one chart or an array of charts:
+
+```ruby
+html = VGHelper.to_html([chart1, chart2])
+html = html.sub("</head>", "<style>body { margin: 2rem; }</style></head>")
+File.write("custom-charts.html", html, encoding: "utf-8")
+```
+
+You can insert your own CSS or JavaScript before serving or saving the
+string. `write_htmls(charts, out)` now delegates to `to_html(charts)` and
+writes its result as UTF-8. This module method returns a full document;
+the `vega` chart object's existing `chart.to_html` returns its embed
+fragment.
+
 ---
 
+
+# Saving charts as images
+
+Charts created by `draw_xdate` and `draw_xnominal` have an actions menu
+(the three dots at the top right). Select **Save as PNG** or **Save as SVG**
+to download the chart currently displayed.
+
+- PNG exports use 2x resolution for clearer text and lines.
+- SVG exports retain vector graphics for resizing.
+- Changes to the axis ranges, category visibility, and brush selection are
+  reflected in the export, including the statistics drawn inside the chart.
+- Sliders, checkboxes, and the actions menu are HTML controls and are not
+  included in the image.
+
+This works in the HTML files produced by `write_htmls` using the bundled
+runtimes, without a CDN, server, Node.js, or extra gems. The export menu is
+also enabled in IRuby output; notebook runtime loading follows the `vega`
+gem's existing behavior.
+
+```ruby
+VGHelper.write_htmls(chart, "chart.html")
+# Open chart.html, adjust the chart, then use the three-dot menu to save it.
+```
+
+To customize the export resolution or hide the menu, use the `vega` gem's
+`embed_options` method. It returns a new chart:
+
+```ruby
+chart = chart.embed_options(
+  actions: { export: true, source: false, compiled: false, editor: false },
+  scaleFactor: { png: 3, svg: 1 }
+)
+# Or: chart = chart.embed_options(actions: false)
+```
+
+This feature saves images from the browser. It does not add a Ruby method
+for writing image files directly.
+
+---
 
 # TODO
 
@@ -629,7 +770,7 @@ VGHelper is still under development.
 
 Planned features include:
 
-- [ ] Export charts as images
+- [x] Export charts as images from the browser
 - [ ] Improve customization of Vega-Lite parameters
 - [ ] Improve documentation and examples
 
@@ -672,7 +813,7 @@ gem build vg_helper.gemspec
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/vg_helper.
+Bug reports and pull requests are welcome at https://github.com/show-o-atakun/vg_helper.
 
 ## License
 
@@ -681,4 +822,4 @@ The gem is available as open source under the terms of the [MIT License](https:/
 The bundled Vega, Vega-Lite, and Vega-Embed JavaScript files remain
 subject to their respective licenses.
 
-Please see the relevant license files for details.
+Please see `THIRD_PARTY_LICENSES.txt` for the bundled runtime licenses.
