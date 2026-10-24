@@ -26,6 +26,10 @@ jobs:
           bundle lock --add-platform ruby
           bundle install
       - run: bundle exec rspec
+      - name: Build gem and check its packaged contents
+        run: |
+          bundle exec rake build
+          bundle exec ruby spec/support/package_smoke.rb pkg/vg_helper-*.gem
       - name: Build browser fixtures from the Ruby helpers
         run: bundle exec ruby -Ilib spec/support/browser_fixtures.rb tmp/browser
       - uses: actions/setup-node@v4
@@ -43,4 +47,11 @@ jobs:
         with:
           name: vg-helper-chart-examples
           path: tmp/browser/
+          retention-days: 14
+      - name: Save the tested gem package
+        uses: actions/upload-artifact@v4
+        with:
+          name: vg-helper-gem
+          path: pkg/*.gem
+          if-no-files-found: error
           retention-days: 14
