@@ -47,6 +47,33 @@ these libraries from an external CDN.
 
 ## Installation
 
+### Preview release: 0.1.3.pre.1
+
+The changes described here are being prepared as a prerelease for testing
+with real data. Once it is published to RubyGems.org, install it explicitly:
+
+```sh
+gem install vg_helper -v 0.1.3.pre.1
+```
+
+Or pin it in your Gemfile:
+
+```ruby
+gem "vg_helper", "0.1.3.pre.1"
+```
+
+Ordinary installs do not select this prerelease. To test an unpublished
+build, download `vg-helper-gem` from a successful GitHub Actions run,
+extract the ZIP, and install its gem file:
+
+```sh
+gem install --local vg_helper-0.1.3.pre.1.gem
+```
+
+See [RELEASING.md](RELEASING.md) for packaging and publication instructions.
+
+### Stable release
+
 Add this line to your application's Gemfile:
 
 ```ruby
@@ -786,7 +813,7 @@ gem build vg_helper.gemspec
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/vg_helper.
+Bug reports and pull requests are welcome at https://github.com/show-o-atakun/vg_helper.
 
 ## License
 
@@ -795,4 +822,4 @@ The gem is available as open source under the terms of the [MIT License](https:/
 The bundled Vega, Vega-Lite, and Vega-Embed JavaScript files remain
 subject to their respective licenses.
 
-Please see the relevant license files for details.
+Please see `THIRD_PARTY_LICENSES.txt` for the bundled runtime licenses.
