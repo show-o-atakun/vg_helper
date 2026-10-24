@@ -1747,6 +1747,7 @@ module VGHelper
 		vegas_lines = vegas.map { |vf|
 		"<script>#{File.read(vf, encoding: 'utf-8')}</script>"
 		}.join("\n")
+		third_party_licenses = File.read(File.join(__dir__, "..", "THIRD_PARTY_LICENSES.txt"), encoding: "utf-8")
 
 		## header, footer (No Slider Caption)
 		html_head = <<-HTML
@@ -1756,6 +1757,9 @@ module VGHelper
 		  <meta charset="utf-8" />
 		  <meta name="viewport" content="width=device-width, initial-scale=1" />
 		  <title>Vega chart</title>
+		  <!--
+		#{third_party_licenses}
+		  -->
 		</head>
 		<style>
 		input[type=range]+span {
