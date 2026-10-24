@@ -1,6 +1,9 @@
 ## [Unreleased]
 
-## [0.1.3] - 2026-10-22
+## [0.1.3.pre.1] - 2026-10-24
+
+Preview release for testing the upcoming 0.1.3 with real data.
+Normal installs continue to select the latest stable release.
 
 ### Added
 
@@ -18,6 +21,7 @@
 
 ### Fixed
 
+- Include upstream runtime license notices in the gem and standalone HTML.
 - Read bundled JavaScript and write standalone HTML as UTF-8 to preserve
   runtime strings and Japanese chart text.
 - Normalize numeric categories and explicit category lists to strings.
